@@ -1,0 +1,101 @@
+USE BMS;
+BEGIN;
+CREATE  PROCEDURE `PROC_DELETE_LOG_CDC`(IN V_TABLENAME VARCHAR(50),V_START_TM VARCHAR(14),V_END_TM VARCHAR(14),V_DELETE_NUM INT,V_SAVE_DAY INT)
+BEGIN
+/* =======================================================================
+     * 系统名 : Kettle系统
+     * 子系统名 : LOG CDC数据清理
+     * PROC名 : PROC_DELETE_LOG_CDC
+     * 概要 : 每天规定时间内批量清理固定记录数LOG CDC表数据
+     * 例：删除CDC数据: DELETE FROM	KETTLE_ETL_JOB_LOG_BACK WHERE	LOG_ID > '1000' AND LOG_ID < '1000000'
+     * 改版履历 :
+     * 版本 日期 作者名 备注
+     * 1.4 2016.06.03 MINJIE.QU 初次作成
+     * ======================================================================= */
+    -- 传入变量: V_START_SEQ 删除开始SEQUENCE  V_END_SEQ 删除结束SEQUENCE V_DELETE_NUM 每次删除记录条数 V_MAX_SEQ 删除结束SEQUENCE
+    
+    -- 定义DELETE总体循环开始V_START_SEQ
+    DECLARE V_START_SEQ VARCHAR(35);
+    -- 定义DELETE总体循环结束V_END_SEQ
+    DECLARE V_END_SEQ VARCHAR(35);
+    -- 定义DELETE单次循环结束V_MAX_SEQ
+    DECLARE V_MAX_SEQ VARCHAR(35);
+    
+    -- EXCEPTION处理
+    -- DECLARE mysql_error_code CONDITION FOR SQLSTATE '12345'; 
+    -- DECLARE CONTINUE HANDLER FOR mysql_error_code;A
+    
+    -- 初始化单次删除COMMIT条数
+    IF V_DELETE_NUM IS NULL 
+    THEN
+       SET V_DELETE_NUM=1000;
+    ELSE
+       SET V_DELETE_NUM=V_DELETE_NUM;
+    END IF;
+    
+    -- 初始化冗余天数
+    IF V_SAVE_DAY IS NULL 
+    THEN
+       SET V_SAVE_DAY=7;
+    ELSE
+       SET V_SAVE_DAY=V_SAVE_DAY;
+    END IF;
+    
+    -- 把V_START_SEQ初始化成V_START_TM的SEQ
+    SET V_START_SEQ = CONCAT(DATE_FORMAT(DATE_SUB(TIMESTAMP(V_START_TM),INTERVAL 8 HOUR),'%Y%m%d%H%i%s'),'000000000000000000000');
+
+    IF V_START_SEQ IS NULL
+    THEN 
+        SET V_START_SEQ = CONCAT(DATE_FORMAT(DATE_SUB(CURRENT_TIMESTAMP(),INTERVAL 1 YEAR),'%Y%m%d%H%i%s'),'000000000000000000000');
+    ELSE 
+        SET V_START_SEQ = V_START_SEQ;
+    END IF;
+    
+    -- 把V_END_SEQ初始化成当前时间SEQ
+    
+    SET V_END_SEQ = CONCAT(DATE_FORMAT(DATE_SUB(TIMESTAMP(V_END_TM),INTERVAL V_SAVE_DAY*24+8 HOUR),'%Y%m%d%H%i%s'),'000000000000000000000');
+    
+    IF V_END_SEQ IS NULL
+    THEN 
+        SET V_END_SEQ = CONCAT(DATE_FORMAT(DATE_SUB(CURRENT_TIMESTAMP(),INTERVAL V_SAVE_DAY*24+8 HOUR),'%Y%m%d%H%i%s'),'000000000000000000000');
+    ELSE 
+        SET V_END_SEQ = V_END_SEQ;
+    END IF;
+    
+    -- 把V_MAX_SEQ初始化成V_START_SEQ
+    SET V_MAX_SEQ = V_START_SEQ; 
+
+    -- 开始循环，判断是否游标已经到达了最后作为循环条件  
+    WHILE V_MAX_SEQ < V_END_SEQ && V_MAX_SEQ IS NOT NULL DO
+
+    -- 表V_TABLENAME的MAX_SEQ_TAB_CDC选出V_DELETE_NUM条记录最大LOG_ID的结果，存入V_MAX_SEQ
+    SET @GET_MAX_SQE = CONCAT('SELECT @V_MAX_SEQ_CDC:=MAX(CDC.LOG_ID)  FROM( SELECT LOG_ID FROM ',V_TABLENAME,' WHERE LOG_ID >=\'', V_MAX_SEQ,'\' AND LOG_ID<\'', V_END_SEQ,'\' ORDER BY LOG_ID LIMIT ', V_DELETE_NUM,') CDC');
+    PREPARE STMT FROM @GET_MAX_SQE;
+    EXECUTE STMT;
+    DEALLOCATE PREPARE STMT;
+
+    SET V_MAX_SEQ=@V_MAX_SEQ_CDC;  
+    
+    IF V_MAX_SEQ IS NOT NULL
+    THEN 
+    -- 开始执行删除操作
+    START TRANSACTION;
+    SET @DELETE_SESSION_CDC = CONCAT('DELETE FROM ',V_TABLENAME,' WHERE LOG_ID >=\'', V_START_SEQ,'\' AND LOG_ID<=\'',V_MAX_SEQ,'\'');
+    SELECT @DELETE_CDC;
+    PREPARE STMT FROM @DELETE_SESSION_CDC;
+    EXECUTE STMT;
+    DEALLOCATE PREPARE STMT;
+    -- 结束执行删除操作 
+    END IF;
+    
+    -- V_DELETE_NUM条提交一次
+    COMMIT;
+    
+    -- 把上次的V_MAX_SEQ赋值给V_START_SEQ
+    SET V_START_SEQ = V_MAX_SEQ;
+
+    -- 结束循环
+    END WHILE;  
+   
+END;
+COMMIT;
