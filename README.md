@@ -1,5 +1,5 @@
 # KettleQuickStartGuide
-微信公众号："游走在数据之间"<br><br>
+微信公众号："以数据之名"<br><br>
 
 # 1、简要介绍ETL是什么？
 # 2、Kettle的架构及优势
