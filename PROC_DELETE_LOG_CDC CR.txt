@@ -10,7 +10,7 @@ BEGIN
      * 例：删除CDC数据: DELETE FROM	KETTLE_ETL_JOB_LOG_BACK WHERE	LOG_ID > '1000' AND LOG_ID < '1000000'
      * 改版履历 :
      * 版本 日期 作者名 备注
-     * 1.4 2016.06.03 MINJIE.QU 初次作成
+     * 1.4 2016.06.03 以数据之名 初次作成
      * ======================================================================= */
     -- 传入变量: V_START_SEQ 删除开始SEQUENCE  V_END_SEQ 删除结束SEQUENCE V_DELETE_NUM 每次删除记录条数 V_MAX_SEQ 删除结束SEQUENCE
     
